@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>彩铅花园 - 种花小游戏</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6dae76',
+                        secondary: '#f9e8a6',
+                        accent: '#e88873',
+                        neutral: '#f5f5f5',
+                        dark: '#333333',
+                        soil: '#8b5a2b',
+                        soilLight: '#a67c52',
+                        soilPencil: '#c8a171',
+                        soilTexture: '#9e6f44'
+                    },
+                    fontFamily: {
+                        game: ['"Comic Sans MS"', 'cursive', 'sans-serif'],
+                    },
+                    touchAction: {
+                        'none': 'none',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .no-highlight {
+                -webkit-tap-highlight-color: transparent;
+                tap-highlight-color: transparent;
+            }
+            .min-touch {
+                min-height: 48px;
+                min-width: 48px;
+            }
+            .plot-grid {
+                border: 4px solid theme('colors.soil');
+                border-radius: 6px;
+                background-color: theme('colors.soilLight');
+                background-image: 
+                    linear-gradient(135deg, rgba(200, 161, 113, 0.2) 20%, transparent 20%, transparent 40%, rgba(200, 161, 113, 0.2) 40%, rgba(200, 161, 113, 0.2) 60%, transparent 60%, transparent 80%, rgba(200, 161, 113, 0.2) 80%),
+                    linear-gradient(0deg, rgba(158, 111, 68, 0.1) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255, 245, 230, 0.05) 1px, transparent 1px);
+                background-size: 24px 24px, 8px 8px, 12px 12px;
+                box-shadow: inset 0 0 12px rgba(139, 90, 43, 0.3);
+            }
+            .plot-cell {
+                @apply aspect-square flex flex-col items-center justify-center relative touch-manipulation transition-all duration-200 min-touch no-highlight;
+                touch-action: manipulation;
+                border: 1px solid rgba(139, 90, 43, 0.2);
+                border-radius: 4px;
+                &:hover, &:active {
+                    background-color: rgba(255, 245, 230, 0.15);
+                }
+            }
+            .plot-cell-empty {
+                @apply bg-soilLight/50 hover:bg-secondary/40 active:bg-secondary/60;
+                background-image: linear-gradient(45deg, rgba(249, 232, 166, 0.1) 50%, transparent 50%);
+                background-size: 8px 8px;
+            }
+            .plot-cell-growing {
+                @apply bg-secondary/20;
+                border: 1px solid rgba(249, 232, 166, 0.4);
+            }
+            .plot-cell-mature {
+                @apply bg-accent/10 hover:bg-accent/20 active:bg-accent/30;
+                border: 1px solid rgba(232, 136, 115, 0.3);
+            }
+            .seed-btn {
+                @apply px-3 py-2 rounded-lg border border-primary/30 hover:bg-primary/10 active:bg-primary/20 transition-all cursor-pointer touch-manipulation min-touch no-highlight;
+            }
+            .shop-item {
+                @apply flex items-center justify-between p-3 rounded-lg bg-white/80 mb-2 hover:bg-primary/5 active:bg-primary/10 transition-all touch-manipulation min-touch no-highlight;
+            }
+            .btn-touch {
+                @apply py-3 px-6 text-lg touch-manipulation active:scale-95 transition-transform min-touch no-highlight;
+            }
+            .svg-flower {
+                @apply w-16 h-16 sm:w-20 sm:h-20 object-contain;
+                filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
+            }
+            .achievement-unlocked {
+                @apply bg-primary/10 border-l-4 border-primary;
+            }
+            .achievement-locked {
+                @apply bg-gray-100 border-l-4 border-gray-300 text-gray-500;
+            }
+            .mobile-toast {
+                @apply fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-soil text-white rounded-lg shadow-lg p-4 z-50 max-w-sm text-center no-highlight;
+                max-width: 90%;
+                padding: 12px 20px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-neutral font-game min-h-screen pb-10 no-highlight" style="touch-action: manipulation;">
+    <!-- 登录/注册面板 -->
+    <div id="auth-panel" class="flex flex-col items-center justify-center min-h-screen px-4 py-6">
+        <div class="bg-white rounded-xl shadow-lg p-6 sm:p-8 max-w-md w-full">
+            <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] text-primary text-center mb-6">🎨 彩铅花园</h1>
+            
+            <div class="mb-4">
+                <label for="username" class="block text-dark mb-2 text-lg">用户名</label>
+                <input type="text" id="username" placeholder="请输入用户名" 
+                       class="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 min-touch">
+            </div>
+            
+            <div class="flex gap-3 mb-4">
+                <button id="login-btn" class="flex-1 btn-touch bg-primary text-white rounded-lg hover:bg-primary/90">
+                    <i class="fas fa-sign-in-alt mr-2"></i> 登录
+                </button>
+                <button id="register-btn" class="flex-1 btn-touch bg-accent text-white rounded-lg hover:bg-accent/90">
+                    <i class="fas fa-user-plus mr-2"></i> 注册
+                </button>
+            </div>
+            
+            <p class="text-gray-500 text-center">登录无需密码，直接输入用户名即可</p>
+        </div>
+    </div>
+
+    <!-- 游戏主面板 -->
+    <div id="game-panel" class="hidden px-4 py-6 max-w-7xl mx-auto">
+        <!-- 顶部信息栏 -->
+        <header class="bg-white rounded-xl shadow-md p-4 mb-6">
+            <div class="flex flex-wrap justify-between items-center">
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-primary">👤 <span id="user-display-name"></span></h2>
+                    <p class="text-sm sm:text-base text-gray-600">
+                        积分: <span id="user-points" class="font-bold text-accent">0</span> | 
+                        肥料: <span id="user-fertilizer" class="font-bold">0</span> |
+                        连续签到: <span id="sign-in-streak" class="font-bold text-blue-500">0</span>天
+                    </p>
+                </div>
+                
+                <div class="flex gap-2 mt-3 sm:mt-0">
+                    <button id="sign-in-btn" class="btn-touch bg-blue-500 text-white rounded-lg hover:bg-blue-600 hidden">
+                        <i class="fas fa-calendar-check mr-2"></i> 每日签到
+                    </button>
+                    <button id="logout-btn" class="btn-touch bg-accent/90 text-white rounded-lg hover:bg-accent">
+                        <i class="fas fa-sign-out-alt mr-2"></i> 退出
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 标签页导航 -->
+        <div class="bg-white rounded-xl shadow-md mb-6 overflow-hidden">
+            <div class="flex flex-wrap">
+                <button id="tab-field" class="flex-1 py-3 px-4 text-primary font-bold border-b-4 border-primary min-touch">
+                    <i class="fas fa-seedling mr-1"></i> 我的花园
+                </button>
+                <button id="tab-shop" class="flex-1 py-3 px-4 text-gray-500 hover:text-primary min-touch">
+                    <i class="fas fa-store mr-1"></i> 积分商城
+                </button>
+                <button id="tab-achievements" class="flex-1 py-3 px-4 text-gray-500 hover:text-primary min-touch">
+                    <i class="fas fa-trophy mr-1"></i> 成就系统
+                </button>
+            </div>
+        </div>
+
+        <!-- 标签页内容 -->
+        <div class="tab-content">
+            <!-- 花园标签页 -->
+            <div id="content-field" class="block">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <!-- 左侧田地 -->
+                    <div class="lg:col-span-3">
+                        <div class="bg-white rounded-xl shadow-md p-4 mb-4">
+                            <h3 class="text-lg sm:text-xl font-bold text-dark mb-4">🌾 我的田地</h3>
+                            <p class="text-sm text-gray-500 mb-4">
+                                已开垦地块: <span id="plot-count" class="font-bold text-primary">2</span> 
+                                (可在商城兑换更多)
+                            </p>
+                            
+                            <!-- 彩铅风格方格田地 -->
+                            <div id="plots-container" class="plot-grid p-2 sm:p-4">
+                                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1 sm:gap-2">
+                                    <!-- 地块将动态生成 -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 工具栏 -->
+                        <div class="bg-white rounded-xl shadow-md p-4">
+                            <h3 class="text-lg font-bold text-dark mb-4">🧰 园艺工具</h3>
+                            <div class="flex flex-wrap gap-2">
+                                <button id="water-btn" class="btn-touch bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                                    <i class="fas fa-tint mr-2"></i> 浇水 (加速生长)
+                                </button>
+                                <button id="harvest-all-btn" class="btn-touch bg-accent text-white rounded-lg hover:bg-accent/90">
+                                    <i class="fas fa-scythe mr-2"></i> 收获所有成熟花朵
+                                </button>
+                                <button id="clear-all-btn" class="btn-touch bg-gray-500 text-white rounded-lg hover:bg-gray-600">
+                                    <i class="fas fa-broom mr-2"></i> 清理空地块
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧种子栏 -->
+                    <div>
+                        <div class="bg-white rounded-xl shadow-md p-4 mb-6">
+                            <h3 class="text-lg font-bold text-dark mb-4">🌰 我的种子</h3>
+                            <div id="seeds-inventory" class="space-y-2 max-h-[400px] overflow-y-auto">
+                                <!-- 种子将动态生成 -->
+                            </div>
+                        </div>
+                        
+                        <!-- 生长信息 -->
+                        <div class="bg-white rounded-xl shadow-md p-4">
+                            <h3 class="text-lg font-bold text-dark mb-2">📊 生长信息</h3>
+                            <div id="growth-info" class="text-sm space-y-1 text-gray-700">
+                                <p><i class="fas fa-clock mr-1"></i> 蓝雪花: 5秒/阶段</p>
+                                <p><i class="fas fa-clock mr-1"></i> 玫瑰: 10秒/阶段</p>
+                                <p><i class="fas fa-clock mr-1"></i> 郁金香: 8秒/阶段</p>
+                                <p><i class="fas fa-clock mr-1"></i> 向日葵: 12秒/阶段</p>
+                                <p><i class="fas fa-clock mr-1"></i> 薰衣草: 7秒/阶段</p>
+                                <p><i class="fas fa-clock mr-1"></i> 雏菊: 6秒/阶段</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 商城标签页 -->
+            <div id="content-shop" class="hidden">
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h3 class="text-xl font-bold text-dark mb-6">🏪 积分商城</h3>
+                    <p class="text-gray-600 mb-4">当前积分: <span id="shop-points" class="font-bold text-accent text-lg">0</span></p>
+                    
+                    <div id="shop-container" class="space-y-3 max-h-[70vh] overflow-y-auto">
+                        <!-- 商城物品将动态生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 成就标签页 -->
+            <div id="content-achievements" class="hidden">
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h3 class="text-xl font-bold text-dark mb-6">🏆 成就系统</h3>
+                    <p class="text-gray-600 mb-4">已解锁: <span id="achievement-count" class="font-bold text-primary">0</span>/<span id="total-achievements">0</span></p>
+                    
+                    <div id="achievements-container" class="space-y-3 max-h-[70vh] overflow-y-auto">
+                        <!-- 成就将动态生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 种子选择弹窗 -->
+    <div id="seed-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden" style="touch-action: none;">
+        <div class="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4 min-h-[200px]">
+            <h3 class="text-xl font-bold text-dark mb-4">🌱 选择要种植的种子</h3>
+            <div id="seed-modal-list" class="space-y-3 max-h-[60vh] overflow-y-auto">
+                <!-- 种子选项动态生成 -->
+            </div>
+            <button id="close-seed-modal" class="mt-6 w-full btn-touch bg-gray-500 text-white rounded-lg">
+                取消
+            </button>
+        </div>
+    </div>
+
+    <!-- 成就解锁提示 -->
+    <div id="achievement-toast" class="fixed bottom-6 right-6 bg-primary text-white rounded-lg shadow-lg p-4 transform translate-y-20 opacity-0 transition-all duration-500 z-50 max-w-sm no-highlight">
+        <div class="flex items-center">
+            <i class="fas fa-trophy text-2xl mr-3 text-yellow-300"></i>
+            <div>
+                <h4 class="font-bold" id="toast-achievement-name"></h4>
+                <p class="text-sm opacity-90" id="toast-achievement-desc"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 彩铅风格花朵SVG
+        const FLOWER_SVGS = {
+            blueSnowflake: `
+                <svg class="svg-flower" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M50,10 L60,35 L85,40 L65,55 L70,80 L50,70 L30,80 L35,55 L15,40 L40,35 Z" 
+                          fill="#6495ed" stroke="#4a7ba7" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="0.5,1"/>
+                    <circle cx="50" cy="50" r="8" fill="#f9e8a6" stroke="#e0c870" stroke-width="1.5"/>
+                    <path d="M50,70 L50,95" stroke="#8b5a2b" stroke-width="4" stroke-linecap="round" stroke-dasharray="1,1"/>
+                </svg>
+            `,
+            rose: `
+                <svg class="svg-flower" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M50,20 C70,10 85,35 75,55 C85,70 65,80 50,70 C35,80 15,70 25,55 C15,35 30,10 50,20 Z" 
+                          fill="#e85d75" stroke="#c0465c" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="0.5,1"/>
+                    <path d="M50,70 L50,95" stroke="#8b5a2b" stroke-width="4" stroke-linecap="round" stroke-dasharray="1,1"/>
+                </svg>
+            `,
+            tulip: `
+                <svg class="svg-flower" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M50,15 C65,20 75,40 70,60 C70,70 50,75 50,60 C50,75 30,70 30,60 C25,40 35,20 50,15 Z" 
+                          fill="#f39c12" stroke="#d18000" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="0.5,1"/>
+                    <path d="M50,60 L50,95" stroke="#8b5a2b" stroke-width="4" stroke-linecap="round" stroke-dasharray="1,1"/>
+                    <path d="M50,75 L35,85" stroke="#6dae76" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.5,1"/>
+                    <path d="M50,75 L65,85" stroke="#6dae76" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.5,1"/>
+                </svg>
+            `,
+            sunflower: `
+                <svg class="svg-flower" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="45" r="25" fill="#f1c40f" stroke="#d4ac0d" stroke-width="2.5" stroke-dasharray="1,1"/>
+                    <circle cx="50" cy="45" r="10" fill="#8b5a2b" stroke="#6d4420" stroke-width="1.5"/>
+                    <path d="M50,70 L50,95" stroke="#8b5a2b" stroke-width="4" stroke-linecap="round" stroke-dasharray="1,1"/>
+                    <path d="M50,75 L25,65" stroke="#6dae76" stroke-width="4" stroke-linecap="round" stroke-dasharray="0.5,1"/>
+                    <path d="M50,75 L75,65" stroke="#6dae76" stroke-width="4" stroke-linecap="round" stroke-dasharray="0.5,1"/>
+                </svg>
+            `,
+            lavender: `
+                <svg class="svg-flower" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M40,20 L45,30 L35,35 L40,45 L30,50 L35,60 L40,70" 
+                          fill="#9b59b6" stroke="#8e44ad" stroke-width="2.5" stroke-dasharray="0.5,1"/>
+                    <path d="M60,20 L55,30 L65,35 L60,45 L70,50 L65,60 L60,70" 
+                          fill="#9b59b6" stroke="#8e44ad" stroke-width="2.5" stroke-dasharray="0.5,1"/>
+                    <path d="M50,70 L50,95" stroke="#8b5a2b" stroke-width="3" stroke-linecap="round" stroke-dasharray="1,1"/>
+                </svg>
+            `,
+            daisy: `
+                <svg class="svg-flower" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="45" r="5" fill="#f1c40f" stroke="#d4ac0d" stroke-width="1.5"/>
+                    <path d="M50,20 L55,30 L65,25 L70,35 L80,40 L75,50 L80,60 L70,65 L65,75 L55,70 L50,80 L45,70 L35,75 L30,65 L20,60 L25,50 L20,40 L30,35 L35,25 L45,30 Z" 
+                          fill="#ffffff" stroke="#e0e0e0" stroke-width="2" stroke-linejoin="round" stroke-dasharray="0.5,1"/>
+                    <path d="M50,70 L50,95" stroke="#8b5a2b" stroke-width="3" stroke-linecap="round" stroke-dasharray="1,1"/>
+                </svg>
+            `,
+            growing: `
+                <svg class="svg-flower" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M50,80 L50,95" stroke="#8b5a2b" stroke-width="3" stroke-linecap="round" stroke-dasharray="1,1"/>
+                    <circle cx="50" cy="70" r="10" fill="#6dae76" stroke="#5a9060" stroke-width="2.5" stroke-dasharray="0.5,1"/>
+                </svg>
+            `
+        };
+
+        // 游戏配置
+        const GAME_CONFIG = {
+            initialData: {
+                plots: 2,
+                points: 0,
+                fertilizer: 5,
+                seeds: {
+                    blueSnowflake: 5,
+                    rose: 0,
+                    tulip: 0,
+                    sunflower: 0,
+                    lavender: 0,
+                    daisy: 0
+                },
+                plotStates: [],
+                signIn: {
+                    lastSignIn: '',
+                    streak: 0
+                },
+                achievements: {}
+            },
+            seedTypes: {
+                blueSnowflake: {
+                    name: '蓝雪花',
+                    svg: FLOWER_SVGS.blueSnowflake,
+                    growTime: 5,
+                    growInterval: 5,
+                    pointValue: 10,
+                    shopPrice: 5,
+                    color: '#6495ed',
+                    special: '生长最快'
+                },
+                rose: {
+                    name: '玫瑰',
+                    svg: FLOWER_SVGS.rose,
+                    growTime: 8,
+                    growInterval: 10,
+                    pointValue: 25,
+                    shopPrice: 12,
+                    color: '#e85d75',
+                    special: '积分最高'
+                },
+                tulip: {
+                    name: '郁金香',
+                    svg: FLOWER_SVGS.tulip,
+                    growTime: 6,
+                    growInterval: 8,
+                    pointValue: 18,
+                    shopPrice: 9,
+                    color: '#f39c12',
+                    special: '性价比高'
+                },
+                sunflower: {
+                    name: '向日葵',
+                    svg: FLOWER_SVGS.sunflower,
+                    growTime: 7,
+                    growInterval: 12,
+                    pointValue: 22,
+                    shopPrice: 15,
+                    color: '#f1c40f',
+                    special: '需要阳光'
+                },
+                lavender: {
+                    name: '薰衣草',
+                    svg: FLOWER_SVGS.lavender,
+                    growTime: 5,
+                    growInterval: 7,
+                    pointValue: 15,
+                    shopPrice: 8,
+                    color: '#9b59b6',
+                    special: '香气宜人'
+                },
+                daisy: {
+                    name: '雏菊',
+                    svg: FLOWER_SVGS.daisy,
+                    growTime: 4,
+                    growInterval: 6,
+                    pointValue: 12,
+                    shopPrice: 6,
+                    color: '#ffffff',
+                    special: '易种植'
+                }
+            },
+            shopItems: [
+                { id: 'plot', name: '开垦新地块', icon: '🌾', price: 50, description: '增加1块可种植的地块' },
+                { id: 'fertilizer', name: '有机肥料', icon: '💩', price: 5, description: '加速花朵生长 (每次浇水消耗1个)' },
+                { id: 'seed_blueSnowflake', name: '蓝雪花种子', icon: '❄️', price: 5, description: '生长最快，5秒/阶段' },
+                { id: 'seed_rose', name: '玫瑰种子', icon: '🌹', price: 12, description: '积分最高，10秒/阶段' },
+                { id: 'seed_tulip', name: '郁金香种子', icon: '🌷', price: 9, description: '性价比高，8秒/阶段' },
+                { id: 'seed_sunflower', name: '向日葵种子', icon: '🌻', price: 15, description: '需要阳光，12秒/阶段' },
+                { id: 'seed_lavender', name: '薰衣草种子', icon: '💜', price: 8, description: '香气宜人，7秒/阶段' },
+                { id: 'seed_daisy', name: '雏菊种子', icon: '🌸', price: 6, description: '易种植，6秒/阶段' }
+            ],
+            achievements: [
+                { id: 'first_plant', name: '首次播种', description: '种下你的第一颗种子', icon: '🌱', reward: 10, check: (user) => user.plotStates.some(p => p.seedType !== null) },
+                { id: 'first_harvest', name: '丰收的喜悦', description: '收获第一朵成熟的花', icon: '🍀', reward: 15, check: (user) => user.points >= 10 },
+                { id: 'ten_plots', name: '大地主', description: '开垦10块以上的地块', icon: '🏡', reward: 50, check: (user) => user.plots >= 10 },
+                { id: 'hundred_points', name: '积分达人', description: '累计获得100积分', icon: '💰', reward: 30, check: (user) => user.points >= 100 },
+                { id: 'seven_days_streak', name: '签到达人', description: '连续签到7天', icon: '📅', reward: 70, check: (user) => user.signIn.streak >= 7 },
+                { id: 'all_flowers', name: '花卉收藏家', description: '种植所有品种的花朵', icon: '💐', reward: 100, check: (user) => {
+                    const grownTypes = new Set();
+                    user.plotStates.forEach(p => { if (p.seedType) grownTypes.add(p.seedType); });
+                    return grownTypes.size >= 6;
+                }},
+                { id: 'fertilizer_master', name: '园艺大师', description: '使用肥料浇水50次', icon: '🧴', reward: 40, check: (user) => (user.waterCount || 0) >= 50 }
+            ],
+            signInRewards: [
+                { day: 1, points: 5, fertilizer: 1, seeds: { blueSnowflake: 1 } },
+                { day: 2, points: 8, fertilizer: 2, seeds: { blueSnowflake: 1 } },
+                { day: 3, points: 10, fertilizer: 2, seeds: { daisy: 1 } },
+                { day: 4, points: 12, fertilizer: 3, seeds: { lavender: 1 } },
+                { day: 5, points: 15, fertilizer: 3, seeds: { tulip: 1 } },
+                { day: 6, points: 18, fertilizer: 4, seeds: { sunflower: 1 } },
+                { day: 7, points: 20, fertilizer: 5, seeds: { rose: 1 } },
+            ]
+        };
+
+        // 全局变量
+        let currentUser = null;
+        let seedModalPlotId = null;
+        let growIntervalTimer = null;
+
+        // 工具函数
+        function getTodayDate() {
+            const date = new Date();
+            return `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}`;
+        }
+
+        function initPlotStates(plotCount) {
+            const plotStates = [];
+            for (let i = 0; i < plotCount; i++) {
+                plotStates.push({
+                    id: `plot-${i}`,
+                    seedType: null,
+                    growStage: 0,
+                    watered: false,
+                    lastUpdate: Date.now(),
+                    waterCount: 0
+                });
+            }
+            return plotStates;
+        }
+
+        function saveUserData() {
+            if (!currentUser) return;
+            const users = JSON.parse(localStorage.getItem('flowerGameUsers') || '{}');
+            users[currentUser.username] = {
+                plots: currentUser.plots,
+                points: currentUser.points,
+                fertilizer: currentUser.fertilizer,
+                seeds: currentUser.seeds,
+                plotStates: currentUser.plotStates,
+                signIn: currentUser.signIn,
+                achievements: currentUser.achievements,
+                waterCount: currentUser.waterCount || 0
+            };
+            localStorage.setItem('flowerGameUsers', JSON.stringify(users));
+            localStorage.setItem('flowerGameLastUser', currentUser.username);
+        }
+
+        function loadUserData(username) {
+            const users = JSON.parse(localStorage.getItem('flowerGameUsers') || '{}');
+            if (users[username]) {
+                const userData = users[username];
+                if (!userData.signIn) userData.signIn = { lastSignIn: '', streak: 0 };
+                if (!userData.achievements) userData.achievements = {};
+                if (!userData.waterCount) userData.waterCount = 0;
+                if (userData.plotStates.length < userData.plots) {
+                    const newPlots = initPlotStates(userData.plots);
+                    for (let i = 0; i < userData.plotStates.length; i++) newPlots[i] = userData.plotStates[i];
+                    userData.plotStates = newPlots;
+                }
+                Object.keys(GAME_CONFIG.seedTypes).forEach(type => {
+                    if (!userData.seeds[type]) userData.seeds[type] = 0;
+                });
+                return { username, ...userData };
+            } else {
+                return {
+                    username,
+                    ...GAME_CONFIG.initialData,
+                    plotStates: initPlotStates(GAME_CONFIG.initialData.plots),
+                    waterCount: 0
+                };
+            }
+        }
+
+        // 渲染函数
+        function renderPlots() {
+            const container = document.querySelector('#plots-container > div');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            currentUser.plotStates.forEach((plot, index) => {
+                const plotEl = document.createElement('div');
+                plotEl.className = 'plot-cell';
+                
+                if (plot.seedType === null) {
+                    plotEl.classList.add('plot-cell-empty');
+                    plotEl.innerHTML = `
+                        <div class="text-soil/70 text-sm">空地块</div>
+                        <i class="fas fa-plus text-2xl mt-2 text-soil/60"></i>
+                    `;
+                } else if (plot.growStage <= GAME_CONFIG.seedTypes[plot.seedType].growTime) {
+                    plotEl.classList.add('plot-cell-growing');
+                    const seedConfig = GAME_CONFIG.seedTypes[plot.seedType];
+                    const progress = (plot.growStage / seedConfig.growTime) * 100;
+                    
+                    plotEl.innerHTML = `
+                        ${FLOWER_SVGS.growing}
+                        <div class="w-full h-2 bg-soil/20 rounded-full mt-2">
+                            <div class="h-2 bg-primary rounded-full" style="width: ${progress}%"></div>
+                        </div>
+                        <div class="text-xs mt-1 text-soil/80">
+                            ${seedConfig.name} (${plot.growStage}/${seedConfig.growTime})
+                            ${plot.watered ? '<i class="fas fa-tint text-blue-500"></i>' : ''}
+                        </div>
+                    `;
+                } else {
+                    plotEl.classList.add('plot-cell-mature');
+                    const seedConfig = GAME_CONFIG.seedTypes[plot.seedType];
+                    
+                    plotEl.innerHTML = `
+                        ${seedConfig.svg}
+                        <div class="absolute top-1 right-1 bg-accent text-white text-xs px-2 py-1 rounded-full shadow-sm">
+                            成熟!
+                        </div>
+                        <div class="text-xs mt-1 font-bold text-accent">
+                            点击收获 (${seedConfig.pointValue}积分)
+                        </div>
+                    `;
+                }
+                
+                // 同时绑定touch和click事件（兼容移动端+桌面端）
+                plotEl.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    handlePlotClick(plot, index);
+                }, { passive: false });
+                plotEl.addEventListener('click', () => handlePlotClick(plot, index));
+                
+                container.appendChild(plotEl);
+            });
+        }
+
+        function handlePlotClick(plot, index) {
+            if (!currentUser) return;
+            if (plot.seedType === null) {
+                showSeedModal(plot.id);
+            } else if (plot.growStage > GAME_CONFIG.seedTypes[plot.seedType].growTime) {
+                harvestPlot(index);
+            }
+        }
+
+        function showSeedModal(plotId) {
+            seedModalPlotId = plotId;
+            const seeds = Object.entries(currentUser.seeds).filter(([_, count]) => count > 0);
+            const modalList = document.getElementById('seed-modal-list');
+            if (!modalList) return;
+            modalList.innerHTML = '';
+            
+            if (seeds.length === 0) {
+                modalList.innerHTML = `
+                    <div class="text-center py-6 text-gray-500">
+                        <i class="fas fa-seedling text-4xl mb-2"></i>
+                        <p>你没有可用的种子！</p>
+                        <p class="mt-1">可以去积分商城兑换~</p>
+                    </div>
+                `;
+            } else {
+                seeds.forEach(([type, count]) => {
+                    const config = GAME_CONFIG.seedTypes[type];
+                    const seedEl = document.createElement('div');
+                    seedEl.className = 'flex items-center p-3 rounded-lg border border-gray-200 hover:bg-primary/5 cursor-pointer min-touch no-highlight';
+                    
+                    seedEl.innerHTML = `
+                        <div class="mr-3">${config.svg.replace('svg-flower', 'w-10 h-10')}</div>
+                        <div class="flex-1">
+                            <div class="font-bold" style="color: ${config.color}">${config.name}</div>
+                            <div class="text-xs text-gray-500">剩余: ${count}颗 | ${config.special}</div>
+                        </div>
+                        <div class="text-sm bg-primary/10 px-2 py-1 rounded">${config.growInterval}秒/阶段</div>
+                    `;
+                    
+                    seedEl.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        plantSeed(plotId, type);
+                        closeSeedModal();
+                    }, { passive: false });
+                    seedEl.addEventListener('click', () => {
+                        plantSeed(plotId, type);
+                        closeSeedModal();
+                    });
+                    
+                    modalList.appendChild(seedEl);
+                });
+            }
+            
+            const modal = document.getElementById('seed-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                document.body.style.touchAction = 'none';
+                document.documentElement.style.overflow = 'hidden';
+            }
+        }
+
+        function closeSeedModal() {
+            const modal = document.getElementById('seed-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+                document.body.style.touchAction = '';
+                document.documentElement.style.overflow = '';
+            }
+        }
+
+        function plantSeed(plotId, seedType) {
+            if (!currentUser) return;
+            currentUser.seeds[seedType]--;
+            
+            const plotIndex = currentUser.plotStates.findIndex(p => p.id === plotId);
+            if (plotIndex !== -1) {
+                currentUser.plotStates[plotIndex] = {
+                    ...currentUser.plotStates[plotIndex],
+                    seedType,
+                    growStage: 1,
+                    watered: false,
+                    lastUpdate: Date.now(),
+                    waterCount: 0
+                };
+            }
+            
+            checkAchievements();
+            saveUserData();
+            renderPlots();
+            renderSeedsInventory();
+        }
+
+        function harvestPlot(index) {
+            if (!currentUser) return;
+            const plot = currentUser.plotStates[index];
+            const seedConfig = GAME_CONFIG.seedTypes[plot.seedType];
+            
+            currentUser.points += seedConfig.pointValue;
+            currentUser.plotStates[index] = {
+                id: plot.id,
+                seedType: null,
+                growStage: 0,
+                watered: false,
+                lastUpdate: Date.now(),
+                waterCount: 0
+            };
+            
+            checkAchievements();
+            showToast(`收获了${seedConfig.name}，获得${seedConfig.pointValue}积分！`);
+            saveUserData();
+            renderPlots();
+            updateUserInfo();
+        }
+
+        function harvestAll() {
+            if (!currentUser) return;
+            let totalPoints = 0;
+            let harvestedCount = 0;
+            
+            currentUser.plotStates.forEach((plot, index) => {
+                if (plot.seedType && plot.growStage > GAME_CONFIG.seedTypes[plot.seedType].growTime) {
+                    totalPoints += GAME_CONFIG.seedTypes[plot.seedType].pointValue;
+                    harvestedCount++;
+                    currentUser.plotStates[index] = {
+                        id: plot.id,
+                        seedType: null,
+                        growStage: 0,
+                        watered: false,
+                        lastUpdate: Date.now(),
+                        waterCount: 0
+                    };
+                }
+            });
+            
+            if (harvestedCount > 0) {
+                currentUser.points += totalPoints;
+                showToast(`共收获${harvestedCount}朵花，获得${totalPoints}积分！`);
+                checkAchievements();
+                saveUserData();
+                renderPlots();
+                updateUserInfo();
+            } else {
+                showToast('没有可收获的成熟花朵！');
+            }
+        }
+
+        function clearAllEmptyPlots() {
+            if (!currentUser) return;
+            currentUser.plotStates.forEach((plot, index) => {
+                if (plot.seedType === null) {
+                    currentUser.plotStates[index] = {
+                        id: plot.id,
+                        seedType: null,
+                        growStage: 0,
+                        watered: false,
+                        lastUpdate: Date.now(),
+                        waterCount: 0
+                    };
+                }
+            });
+            
+            saveUserData();
+            renderPlots();
+            showToast('已清理所有空地块！');
+        }
+
+        function waterPlots() {
+            if (!currentUser) return;
+            if (currentUser.fertilizer <= 0) {
+                showToast('肥料不足！可以去积分商城兑换~');
+                return;
+            }
+            
+            let wateredCount = 0;
+            currentUser.plotStates.forEach((plot, index) => {
+                if (plot.seedType && plot.growStage <= GAME_CONFIG.seedTypes[plot.seedType].growTime && !plot.watered) {
+                    currentUser.plotStates[index].growStage = Math.min(
+                        plot.growStage + 1,
+                        GAME_CONFIG.seedTypes[plot.seedType].growTime + 1
+                    );
+                    currentUser.plotStates[index].watered = true;
+                    currentUser.plotStates[index].waterCount += 1;
+                    wateredCount++;
+                }
+            });
+            
+            if (wateredCount > 0) {
+                currentUser.fertilizer--;
+                currentUser.waterCount += wateredCount;
+                showToast(`已为${wateredCount}个地块浇水，加速生长！剩余肥料: ${currentUser.fertilizer}`);
+                checkAchievements();
+                saveUserData();
+                renderPlots();
+                updateUserInfo();
+            } else {
+                showToast('没有需要浇水的地块！');
+            }
+        }
+
+        function renderSeedsInventory() {
+            const container = document.getElementById('seeds-inventory');
+            if (!container || !currentUser) return;
+            container.innerHTML = '';
+            
+            Object.entries(GAME_CONFIG.seedTypes).forEach(([type, config]) => {
+                const count = currentUser.seeds[type] || 0;
+                const seedEl = document.createElement('div');
+                seedEl.className = 'seed-btn';
+                seedEl.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="mr-2">${config.svg.replace('svg-flower', 'w-8 h-8')}</div>
+                        <div class="flex-1">
+                            <div style="color: ${config.color}" class="font-bold">${config.name}</div>
+                            <div class="text-xs text-gray-500">${config.growInterval}秒/阶段 | ${config.pointValue}积分</div>
+                        </div>
+                        <div class="text-lg font-bold">${count}</div>
+                    </div>
+                `;
+                container.appendChild(seedEl);
+            });
+        }
+
+        function renderShop() {
+            const container = document.getElementById('shop-container');
+            if (!container || !currentUser) return;
+            container.innerHTML = '';
+            
+            GAME_CONFIG.shopItems.forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.className = 'shop-item';
+                
+                itemEl.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">${item.icon}</span>
+                        <div>
+                            <div class="font-bold">${item.name}</div>
+                            <div class="text-xs text-gray-500">${item.description}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="text-accent font-bold mr-3">${item.price} 积分</span>
+                        <button class="buy-btn px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 active:bg-primary/80 transition-all min-touch" 
+                                data-item-id="${item.id}" data-price="${item.price}">
+                            购买
+                        </button>
+                    </div>
+                `;
+                
+                container.appendChild(itemEl);
+            });
+            
+            const shopPointsEl = document.getElementById('shop-points');
+            if (shopPointsEl) shopPointsEl.textContent = currentUser.points;
+            
+            // 绑定购买事件
+            document.querySelectorAll('.buy-btn').forEach(btn => {
+                btn.removeEventListener('touchstart', handleShopPurchase);
+                btn.removeEventListener('click', handleShopPurchase);
+                
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    handleShopPurchase.call(btn, e);
+                }, { passive: false });
+                btn.addEventListener('click', handleShopPurchase);
+            });
+        }
+
+        function handleShopPurchase(e) {
+            if (!currentUser) return;
+            const itemId = this.dataset.itemId;
+            const price = parseInt(this.dataset.price);
+            
+            if (currentUser.points < price) {
+                showToast('积分不足！');
+                return;
+            }
+            
+            currentUser.points -= price;
+            
+            switch (itemId) {
+                case 'plot':
+                    currentUser.plots++;
+                    currentUser.plotStates.push({
+                        id: `plot-${currentUser.plots - 1}`,
+                        seedType: null,
+                        growStage: 0,
+                        watered: false,
+                        lastUpdate: Date.now(),
+                        waterCount: 0
+                    });
+                    showToast('成功开垦新地块！');
+                    break;
+                case 'fertilizer':
+                    currentUser.fertilizer += 5;
+                    showToast('成功购买5个肥料！');
+                    break;
+                default:
+                    if (itemId.startsWith('seed_')) {
+                        const seedType = itemId.replace('seed_', '');
+                        currentUser.seeds[seedType] += 1;
+                        const seedConfig = GAME_CONFIG.seedTypes[seedType];
+                        showToast(`成功购买1颗${seedConfig.name}种子！`);
+                    }
+                    break;
+            }
+            
+            checkAchievements();
+            saveUserData();
+            renderShop();
+            renderPlots();
+            renderSeedsInventory();
+            updateUserInfo();
+            const plotCountEl = document.getElementById('plot-count');
+            if (plotCountEl) plotCountEl.textContent = currentUser.plots;
+        }
+
+        function renderAchievements() {
+            const container = document.getElementById('achievements-container');
+            if (!container || !currentUser) return;
+            container.innerHTML = '';
+            
+            let unlockedCount = 0;
+            
+            GAME_CONFIG.achievements.forEach(achievement => {
+                const isUnlocked = currentUser.achievements[achievement.id] || false;
+                if (isUnlocked) unlockedCount++;
+                
+                const achievementEl = document.createElement('div');
+                achievementEl.className = `p-3 rounded-lg ${isUnlocked ? 'achievement-unlocked' : 'achievement-locked'} min-touch`;
+                
+                achievementEl.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">${achievement.icon}</span>
+                        <div class="flex-1">
+                            <div class="font-bold ${!isUnlocked ? 'text-gray-600' : ''}">${achievement.name}</div>
+                            <div class="text-sm ${!isUnlocked ? 'text-gray-500' : ''}">${achievement.description}</div>
+                            <div class="text-xs mt-1 ${!isUnlocked ? 'text-gray-400' : 'text-primary'}">
+                                奖励: ${achievement.reward}积分
+                            </div>
+                        </div>
+                        <span class="text-xl">${isUnlocked ? '<i class="fas fa-check-circle text-primary"></i>' : '<i class="fas fa-lock text-gray-400"></i>'}</span>
+                    </div>
+                `;
+                
+                container.appendChild(achievementEl);
+            });
+            
+            const achievementCountEl = document.getElementById('achievement-count');
+            const totalAchievementsEl = document.getElementById('total-achievements');
+            if (achievementCountEl) achievementCountEl.textContent = unlockedCount;
+            if (totalAchievementsEl) totalAchievementsEl.textContent = GAME_CONFIG.achievements.length;
+        }
+
+        function checkAchievements() {
+            if (!currentUser) return;
+            GAME_CONFIG.achievements.forEach(achievement => {
+                if (!currentUser.achievements[achievement.id] && achievement.check(currentUser)) {
+                    currentUser.achievements[achievement.id] = true;
+                    currentUser.points += achievement.reward;
+                    showAchievementToast(achievement);
+                }
+            });
+            
+            saveUserData();
+            renderAchievements();
+            updateUserInfo();
+        }
+
+        function showAchievementToast(achievement) {
+            const toast = document.getElementById('achievement-toast');
+            const toastName = document.getElementById('toast-achievement-name');
+            const toastDesc = document.getElementById('toast-achievement-desc');
+            if (!toast || !toastName || !toastDesc) return;
+            
+            toastName.textContent = achievement.name;
+            toastDesc.textContent = `获得${achievement.reward}积分奖励！`;
+            
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+                toast.classList.remove('translate-y-0', 'opacity-100');
+            }, 3000);
+        }
+
+        function showToast(message) {
+            const oldToasts = document.querySelectorAll('.mobile-toast');
+            oldToasts.forEach(t => t.remove());
+            
+            const toast = document.createElement('div');
+            toast.className = 'mobile-toast';
+            toast.textContent = message;
+            
+            document.body.appendChild(toast);
+            
+            toast.style.opacity = '0';
+            toast.style.transform = 'translate(-50%, 20px)';
+            setTimeout(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translate(-50%, 0)';
+                toast.style.transition = 'all 0.3s ease';
+            }, 10);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translate(-50%, 20px)';
+                setTimeout(() => {
+                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                }, 300);
+            }, 2000);
+        }
+
+        function handleSignIn() {
+            if (!currentUser) return;
+            const today = getTodayDate();
+            
+            if (currentUser.signIn.lastSignIn === today) {
+                showToast('你今天已经签到过了！');
+                return;
+            }
+            
+            const lastSignInDate = currentUser.signIn.lastSignIn;
+            let newStreak = 1;
+            
+            if (lastSignInDate) {
+                const [lastY, lastM, lastD] = lastSignInDate.split('-').map(Number);
+                const [currY, currM, currD] = today.split('-').map(Number);
+                
+                const lastDate = new Date(lastY, lastM-1, lastD);
+                const currDate = new Date(currY, currM-1, currD);
+                const diffDays = Math.floor((currDate - lastDate) / (1000 * 60 * 60 * 24));
+                
+                if (diffDays === 1) {
+                    newStreak = currentUser.signIn.streak + 1;
+                }
+            }
+            
+            currentUser.signIn.lastSignIn = today;
+            currentUser.signIn.streak = newStreak;
+            
+            const rewardIndex = Math.min(newStreak - 1, GAME_CONFIG.signInRewards.length - 1);
+            const reward = GAME_CONFIG.signInRewards[rewardIndex];
+            
+            currentUser.points += reward.points;
+            currentUser.fertilizer += reward.fertilizer;
+            
+            Object.entries(reward.seeds).forEach(([type, count]) => {
+                currentUser.seeds[type] += count;
+            });
+            
+            const signInBtn = document.getElementById('sign-in-btn');
+            if (signInBtn) signInBtn.classList.add('hidden');
+            
+            showToast(`签到成功！连续签到${newStreak}天，获得${reward.points}积分+${reward.fertilizer}肥料！`);
+            checkAchievements();
+            saveUserData();
+            updateUserInfo();
+            renderSeedsInventory();
+        }
+
+        function updateUserInfo() {
+            if (!currentUser) return;
+            const userNameEl = document.getElementById('user-display-name');
+            const userPointsEl = document.getElementById('user-points');
+            const userFertilizerEl = document.getElementById('user-fertilizer');
+            const plotCountEl = document.getElementById('plot-count');
+            const signInStreakEl = document.getElementById('sign-in-streak');
+            const shopPointsEl = document.getElementById('shop-points');
+            const signInBtn = document.getElementById('sign-in-btn');
+            
+            if (userNameEl) userNameEl.textContent = currentUser.username;
+            if (userPointsEl) userPointsEl.textContent = currentUser.points;
+            if (userFertilizerEl) userFertilizerEl.textContent = currentUser.fertilizer;
+            if (plotCountEl) plotCountEl.textContent = currentUser.plots;
+            if (signInStreakEl) signInStreakEl.textContent = currentUser.signIn.streak || 0;
+            if (shopPointsEl) shopPointsEl.textContent = currentUser.points;
+            
+            const today = getTodayDate();
+            if (signInBtn) {
+                signInBtn.classList.toggle('hidden', currentUser.signIn.lastSignIn === today);
+            }
+        }
+
+        function autoGrow() {
+            if (!currentUser) return;
+            
+            const now = Date.now();
+            
+            currentUser.plotStates.forEach((plot, index) => {
+                if (plot.seedType && plot.growStage <= GAME_CONFIG.seedTypes[plot.seedType].growTime) {
+                    const seedConfig = GAME_CONFIG.seedTypes[plot.seedType];
+                    const growIntervalMs = seedConfig.growInterval * 1000;
+                    
+                    const timeDiff = now - plot.lastUpdate;
+                    if (timeDiff > growIntervalMs) {
+                        const growSteps = Math.floor(timeDiff / growIntervalMs);
+                        currentUser.plotStates[index].growStage = Math.min(
+                            plot.growStage + growSteps,
+                            seedConfig.growTime + 1
+                        );
+                        currentUser.plotStates[index].lastUpdate = now;
+                    }
+                }
+            });
+            
+            saveUserData();
+            renderPlots();
+        }
+
+        function restartGrowTimer() {
+            if (growIntervalTimer) clearInterval(growIntervalTimer);
+            growIntervalTimer = setInterval(autoGrow, 1000);
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content > div').forEach(el => {
+                el.classList.add('hidden');
+            });
+            
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.classList.remove('text-primary', 'font-bold', 'border-b-4', 'border-primary');
+                btn.classList.add('text-gray-500');
+            });
+            
+            const contentEl = document.getElementById(`content-${tabId}`);
+            if (contentEl) contentEl.classList.remove('hidden');
+            
+            const tabEl = document.getElementById(`tab-${tabId}`);
+            if (tabEl) {
+                tabEl.classList.add('text-primary', 'font-bold', 'border-b-4', 'border-primary');
+                tabEl.classList.remove('text-gray-500');
+            }
+            
+            if (tabId === 'achievements') renderAchievements();
+            if (tabId === 'shop') renderShop();
+        }
+
+        // 登录/注册处理（合并逻辑，注册=登录新用户）
+        function handleLogin() {
+            const usernameInput = document.getElementById('username');
+            if (!usernameInput) return;
+            const username = usernameInput.value.trim();
+            if (!username) {
+                showToast('请输入用户名！');
+                return;
+            }
+            
+            currentUser = loadUserData(username);
+            
+            const authPanel = document.getElementById('auth-panel');
+            const gamePanel = document.getElementById('game-panel');
+            if (authPanel) authPanel.classList.add('hidden');
+            if (gamePanel) gamePanel.classList.remove('hidden');
+            
+            updateUserInfo();
+            renderPlots();
+            renderSeedsInventory();
+            renderShop();
+            renderAchievements();
+            checkAchievements();
+            restartGrowTimer();
+        }
+
+        // 退出登录
+        function handleLogout() {
+            currentUser = null;
+            const authPanel = document.getElementById('auth-panel');
+            const gamePanel = document.getElementById('game-panel');
+            if (authPanel) authPanel.classList.remove('hidden');
+            if (gamePanel) gamePanel.classList.add('hidden');
+            document.getElementById('username').value = '';
+            
+            // 停止定时器
+            if (growIntervalTimer) clearInterval(growIntervalTimer);
+        }
+
+        // 页面加载完成后初始化所有事件绑定
+        document.addEventListener('DOMContentLoaded', function() {
+            // 登录/注册按钮
+            document.getElementById('login-btn').addEventListener('click', handleLogin);
+            document.getElementById('register-btn').addEventListener('click', handleLogin); // 注册和登录逻辑一致
+            
+            // 退出按钮
+            document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            
+            // 签到按钮
+            document.getElementById('sign-in-btn').addEventListener('click', handleSignIn);
+            
+            // 标签页切换
+            document.getElementById('tab-field').addEventListener('click', () => switchTab('field'));
+            document.getElementById('tab-shop').addEventListener('click', () => switchTab('shop'));
+            document.getElementById('tab-achievements').addEventListener('click', () => switchTab('achievements'));
+            
+            // 工具栏按钮
+            document.getElementById('water-btn').addEventListener('click', waterPlots);
+            document.getElementById('harvest-all-btn').addEventListener('click', harvestAll);
+            document.getElementById('clear-all-btn').addEventListener('click', clearAllEmptyPlots);
+            
+            // 弹窗关闭按钮
+            document.getElementById('close-seed-modal').addEventListener('click', closeSeedModal);
+            document.getElementById('close-seed-modal').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                closeSeedModal();
+            }, { passive: false });
+            
+            // 尝试自动登录上次的用户
+            const lastUser = localStorage.getItem('flowerGameLastUser');
+            if (lastUser) {
+                document.getElementById('username').value = lastUser;
+            }
+        });
+    </script>
+</body>
+</html>
